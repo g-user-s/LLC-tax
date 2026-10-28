@@ -247,7 +247,7 @@ Testler geçse bile aşağıdakileri kodu okuyarak doğrula:
 6. Dış ağa istek yapan tek yer `llc_tax/verify.py` → `fetch` olmalı:
 
    ```bash
-   grep -rnE "urlopen|requests|http\.client|socket\.connect" llc_tax/ app.py generator.py
+   grep -rnE --include="*.py" "urlopen|requests|http\.client|socket\.connect" llc_tax/ app.py generator.py
    ```
 
 ### 7.5 Adım 5 — Kullanıcının beyanını kontrol
