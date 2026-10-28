@@ -5,11 +5,13 @@ Alan adları forms/ altındaki PDF'lerden çıkarılıp görsel olarak doğrulan
 
 from __future__ import annotations
 
+import logging
+import re
 import unicodedata
 from pathlib import Path
 
 from pypdf import PdfReader, PdfWriter
-from pypdf.generic import NameObject
+from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject
 
 FORMS_DIR = Path(__file__).resolve().parent.parent / "forms"
 F5472 = FORMS_DIR / "f5472.pdf"
@@ -45,8 +47,7 @@ def values_5472(case: dict, n: dict) -> tuple[dict, dict]:
     owner_addr = ", ".join(x for x in (o["name"], oa.get("street"), oa.get("city"), oa.get("province"),
                                        oa.get("zip"), oa.get("country")) if x)
     ftin = o.get("foreign_tin") or "None"
-    inc = c["date_incorporated"]
-    inc_us = f"{inc[5:7]}/{inc[8:10]}/{inc[:4]}"
+    inc_us = _us_date(c["date_incorporated"])
 
     text = {
         "f1_1": "01/01", "f1_2": str(y), "f1_3": "12/31", "f1_4": str(y),
@@ -96,6 +97,52 @@ def values_5472(case: dict, n: dict) -> tuple[dict, dict]:
         if ans in ("Yes", "No"):
             buttons[f"{field}[{0 if ans == 'Yes' else 1}]"] = yes if ans == "Yes" else no
     return {k: ascii_text(v) for k, v in text.items()}, buttons
+
+
+def values_1120(case: dict, n: dict) -> tuple[dict, dict]:
+    """Pro forma 1120: yalnızca isim, adres, B, C, D ve E (talimat: isim, adres, B ve E zorunlu)."""
+    c = case["company"]
+    a = c["address"]
+    text = {
+        "f1_4": c["name"], "f1_5": a["street"],
+        "f1_7": a["city"], "f1_8": a["state"], "f1_10": a["zip"],
+        "f1_11": c["ein"], "f1_12": _us_date(c["date_incorporated"]),
+        "f1_13": money(n["total_assets"]),
+    }
+    buttons = {"c1_6": "/1"} if n["first_year"] else {}  # E(1) Initial return
+    return {k: ascii_text(v) for k, v in text.items()}, buttons
+
+
+def _us_date(iso: str) -> str:
+    return f"{iso[5:7]}/{iso[8:10]}/{iso[:4]}"
+
+
+def form_year(pdf: Path) -> int | None:
+    """Formun hangi vergi yılına ait olduğunu ilk sayfadan okur ("For calendar year 2025")."""
+    logging.getLogger("pypdf").setLevel(logging.ERROR)  # gömülü fontlar için gereksiz uyarılar
+    m = re.search(r"calendar year (\d{4})", PdfReader(pdf).pages[0].extract_text() or "")
+    return int(m.group(1)) if m else None
+
+
+def _stamp(pdf: Path, text: str, x: float, y: float) -> None:
+    """İlk sayfanın üstüne düz metin damgalar ("Foreign-owned U.S. DE")."""
+    content = f"BT /F1 11 Tf {x} {y} Td ({text}) Tj ET".encode()
+    overlay = PdfWriter()
+    page = overlay.add_blank_page(612, 792)
+    font = DictionaryObject({
+        NameObject("/Type"): NameObject("/Font"), NameObject("/Subtype"): NameObject("/Type1"),
+        NameObject("/BaseFont"): NameObject("/Helvetica-Bold"),
+    })
+    page[NameObject("/Resources")] = DictionaryObject({
+        NameObject("/Font"): DictionaryObject({NameObject("/F1"): overlay._add_object(font)})})
+    stream = DecodedStreamObject()
+    stream.set_data(content)
+    page[NameObject("/Contents")] = overlay._add_object(stream)
+    writer = PdfWriter(clone_from=pdf)
+    writer.pages[0].merge_page(page)
+    writer.set_need_appearances_writer(True)
+    with pdf.open("wb") as f:
+        writer.write(f)
 
 
 def _fill(template: Path, text: dict, buttons: dict, out: Path) -> None:
@@ -169,13 +216,15 @@ def generate(case: dict, result: dict, out_dir: Path) -> dict:
     files, missing = [], []
 
     p1120 = out_dir / f"{y}_1_pro_forma_1120.pdf"
-    if F1120.exists():
-        from .f1120_map import values_1120
+    if not F1120.exists():
+        missing.append("forms/f1120.pdf (vergi yılına ait Form 1120)")
+    elif (fy := form_year(F1120)) != y:
+        missing.append(f"forms/f1120.pdf {fy} yılına ait; {y} için o yılın Form 1120'si gerekli")
+    else:
         text, buttons = values_1120(case, n)
         _fill(F1120, text, buttons, p1120)
+        _stamp(p1120, "Foreign-owned U.S. DE", 230, 772)
         files.append(p1120)
-    else:
-        missing.append("forms/f1120.pdf (vergi yılına ait Form 1120)")
 
     p5472 = out_dir / f"{y}_2_form_5472.pdf"
     text, buttons = values_5472(case, n)

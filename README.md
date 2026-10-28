@@ -31,7 +31,7 @@ Tarayıcıda 6 adımlı sihirbaz açılır:
 | Dosya | Durum |
 |---|---|
 | `forms/f5472.pdf` (Rev. 12-2023) | Repoda mevcut |
-| `forms/f1120.pdf` (vergi yılına ait) | https://www.irs.gov/pub/irs-pdf/f1120.pdf adresinden indirilip eklenmeli |
+| `forms/f1120.pdf` (2025) | Repoda mevcut. Her yeni vergi yılı için o yılın Form 1120'si ile değiştirilmeli; araç yıl uyuşmazlığını yakalar. |
 
 ## Yapı
 
@@ -89,5 +89,5 @@ Satır numaraları **Form 5472 Rev. 12-2023** ve **Instructions Rev. 12-2024** e
 
 1. ✅ Kural motoru (Form 5472 Rev. 12-2023), CLI
 2. ✅ Grafik arayüz, Mercury içe aktarma, Form 5472 PDF doldurma
-3. ⏳ Pro forma 1120 PDF doldurma — `forms/f1120.pdf` eklenince
+3. ✅ Pro forma 1120 PDF doldurma (üstte "Foreign-owned U.S. DE" damgası) ve faks paketi
 4. ⏭ Birim testleri
