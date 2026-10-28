@@ -41,27 +41,36 @@ Sütunlar: `date,description,category,amount_usd,counterparty,paid_by,notes`
 |---|---|---|---|
 | `revenue` (App Store / Google Play) | llc | + | — (üçüncü taraf) |
 | `software_expense`, `bank_fee`, `other_expense` | llc | − | — (üçüncü taraf) |
-| aynı giderler | **owner** | etkisiz | Part IV satır 12 + Part V (ortak katkısı sayılır) |
-| `capital_contribution` | owner | + | Part IV satır 12 + Part V |
-| `owner_draw` | llc | − | Part IV satır 25 + Part V |
-| `loan_from_owner` / `loan_repayment_to_owner` | owner / llc | + / − | Part IV 9a/9b (bakiye) |
-| `loan_to_owner` / `loan_repayment_from_owner` | llc / owner | − / + | Part IV 22a/22b (bakiye) |
-| `interest_paid_to_owner` | llc | − | Part IV satır 23 |
+| aynı giderler | **owner** | etkisiz | Part V (ortak katkısı) |
+| `capital_contribution` | owner | + | Part V |
+| `owner_draw` | llc | − | Part V |
+| `loan_from_owner` / `loan_repayment_to_owner` | owner / llc | + / − | Part IV 17a/17b (bakiye) |
+| `loan_to_owner` / `loan_repayment_from_owner` | llc / owner | − / + | Part IV 31a/31b (bakiye) |
+| `interest_paid_to_owner` | llc | − | Part IV 32 |
 
 ## Hesaplama kuralları
 
-- **Toplam varlık** (1120 D, 5472 1c) = açılış nakdi + LLC hesabından geçen net hareketler.
+Satır numaraları **Form 5472 Rev. 12-2023** ve **Instructions Rev. 12-2024** esas alınır.
+
+- **Sermaye / çekim yalnızca Part V'e** girer. Part IV satır 21/35 sadece vergilendirilebilir
+  geliri etkileyen tutarlar içindir (Reg. §1.6038A-2(b)(3)(x)); DE'nin katkı ve dağıtımları
+  ayrıca (b)(3)(xi) ve Part V kapsamındadır.
+- **Toplam varlık** (1120 D → 5472 1c) = açılış nakdi + LLC hesabından geçen net hareketler.
   Varsayım: LLC'nin nakit dışında varlığı yok.
-- **5472 1f / 1h** = Part IV satır 13 + satır 26. Tek ortak → 1g = 1.
-- **Part V**: katkı/çekim varsa kutu işaretlenir, detay `part_v_statement_<yıl>.txt` ek sayfasına yazılır.
-- `options.report_contributions_distributions_in_part_iv=false` yaparsanız katkı/çekim
-  yalnızca Part V'te raporlanır (uygulamada iki yaklaşım da görülür).
-- **Pro forma 1120**: üstte "Foreign-owned U.S. DE", isim, adres, B (EIN), C, D, E; gelir/gider satırları boş.
+- **22 / 36** = Part IV toplamları (borçlarda yalnızca 17b / 31b dahil).
+- **1f / 1h** = satır 22 + 36 + Part V tutarları (DE için talimat Part V'i de sayar). Tek ortak → 1g = 1.
+- **Part II** DE'de de doldurulur (sahip = direct 25% foreign shareholder). FTIN yoksa "None".
+- **Reference ID**: ortağın SSN/ITIN'i yoksa zorunlu; harf/rakam, ≤50 karakter, her yıl aynı.
+- Yabancı ülke adları kısaltılmaz ("TR" değil "Turkey").
+- **Part VII** herkes doldurur; ortakla borç varsa 42a/42b elle cevaplanır (araç uyarır).
+- **Pro forma 1120**: üstte "Foreign-owned U.S. DE"; zorunlu: isim, adres, B (EIN), E. D de doldurulur.
 
-## Dosyalama hatırlatmaları
+## Dosyalama
 
-- Son tarih: takvim yılı için **15 Nisan** (uzatma: Form 7004).
-- E-file yok; faks veya posta ile IRS'e gönderilir — güncel adres/faks numarasını IRS talimatından teyit edin.
+- Son tarih: takvim yılı için **15 Nisan**. Uzatma: Form 7004 (üstüne "Foreign-owned U.S. DE", Form 1120 kodu).
+- E-file **yapılamaz**. Faks: **855-887-7737** (300 DPI+) veya posta:
+  Internal Revenue Service, 1973 Rulon White Blvd, M/S 6112, Attn: PIN Unit, Ogden, UT 84201
+- Ekler: pro forma 1120 + Form 5472 + Part V statement.
 - Gecikme/eksik dosyalama cezası form başına **$25.000**.
 
 ## Yol haritası
