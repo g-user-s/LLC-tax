@@ -1,38 +1,50 @@
-# LLC-tax — Form 5472 + Pro Forma 1120 veri hazırlayıcı
+# LLC-tax — Form 5472 + Pro Forma 1120 hazırlayıcı
 
-Yabancı ortaklı, tek üyeli (disregarded entity) New Mexico LLC için yıllık
-**Form 5472** ve **Pro Forma Form 1120** verilerini yerelde hesaplar.
+**New Mexico'da kurulu, tek üyeli, sahibi ABD dışında yaşayan ve geliri App Store / Google Play
+kaynaklı** LLC'ler için yıllık **Form 5472** ve **Pro Forma Form 1120**'yi hazırlayan yerel uygulama.
 
-- Sadece Python standart kütüphanesi, **ağ erişimi yok**, dış bağımlılık yok.
-- Gerçek veriler (`config.json`, `transactions.csv`, `output/`) `.gitignore` ile repoya girmez.
+- Grafik arayüz tarayıcıda açılır ama sunucu yalnızca `127.0.0.1` üzerinde çalışır; **hiçbir veri dışarı gönderilmez**.
+- Girilen veriler `data/`, üretilen formlar `output/` klasöründe kalır (ikisi de `.gitignore`'da).
 
-> Bu araç bir hesaplama yardımcısıdır, vergi danışmanlığı değildir. Dosyalamadan önce
-> güncel IRS talimatlarıyla (Instructions for Form 5472) karşılaştırın.
+> Bu araç bir hazırlama yardımcısıdır, vergi danışmanlığı değildir. Göndermeden önce her alanı kontrol edin.
+
+## Kurulum ve çalıştırma
+
+```bash
+pip install -r requirements.txt
+python3 app.py
+```
+
+Tarayıcıda 6 adımlı sihirbaz açılır:
+
+1. **Uygunluk** — koşulların tamamı sağlanmazsa devam edilemez.
+2. **Şirket** — LLC adı, EIN, adres, kuruluş tarihi, yıl başı/sonu banka bakiyesi.
+3. **Ortak** — ad, adres, FTIN, Reference ID, ülkeler.
+4. **İşlemler** — elle giriş ve/veya **Mercury CSV** içe aktarma (kategori tahmini, tekrar eden kayıt atlama; emin olunamayanlar sarı işaretlenir).
+5. **Kontrol** — hatalar, uyarılar, formlara yazılacak tüm değerler.
+6. **Formlar** — doldurulmuş resmi PDF'ler: pro forma 1120, Form 5472, Part V eki ve hepsini birleştiren faks paketi.
+
+Önceki yılın şirket/ortak bilgileri yeni yıla otomatik taşınır.
+
+### Gerekli IRS PDF'leri (`forms/`)
+
+| Dosya | Durum |
+|---|---|
+| `forms/f5472.pdf` (Rev. 12-2023) | Repoda mevcut |
+| `forms/f1120.pdf` (vergi yılına ait) | https://www.irs.gov/pub/irs-pdf/f1120.pdf adresinden indirilip eklenmeli |
 
 ## Yapı
 
 | Dosya | Görev |
 |---|---|
-| `config.example.json` | Şirket + ortak bilgileri şablonu → `config.json` olarak kopyala |
-| `transactions.example.csv` | Yıllık işlem kaydı şablonu → `transactions.csv` olarak kopyala |
-| `generator.py` | Doğrular, hesaplar, satır/kutu matrisini basar, `output/`'a yazar |
-| `output/` | `form_data_<yıl>.json`, `part_v_statement_<yıl>.txt` |
+| `app.py` | Grafik arayüzü başlatır |
+| `llc_tax/engine.py` | Doğrulama + hesaplama (satır eşleştirmeleri) |
+| `llc_tax/mercury.py` | Mercury CSV içe aktarıcı |
+| `llc_tax/pdf_fill.py` | Resmi PDF'leri doldurur, Part V ekini üretir |
+| `llc_tax/server.py`, `llc_tax/static/` | Yerel arayüz |
+| `generator.py` | Komut satırı sürümü (`config.json` + `transactions.csv`, `--pdf`) |
 
-## Kullanım
-
-```bash
-cp config.example.json config.json
-cp transactions.example.csv transactions.csv
-# iki dosyayı kendi verinizle düzenleyin
-python3 generator.py
-```
-
-Seçenekler: `--config`, `--transactions`, `--output-dir`, `--no-write`.
-Doğrulama hatası varsa hiçbir şey yazılmaz ve çıkış kodu `1` olur.
-
-## transactions.csv
-
-Sütunlar: `date,description,category,amount_usd,counterparty,paid_by,notes`
+## Kategoriler
 
 - `amount_usd` her zaman pozitif; yönü kategori belirler. Döviz işlemleri USD'ye çevrilmiş girilir.
 - `paid_by`: `llc` (LLC banka hesabı) veya `owner` (ortak kendi cebinden).
@@ -75,7 +87,7 @@ Satır numaraları **Form 5472 Rev. 12-2023** ve **Instructions Rev. 12-2024** e
 
 ## Yol haritası
 
-1. ✅ Klasör yapısı, örnek config/CSV, doğrulama + satır matrisi (`generator.py`)
-2. ⏭ Resmi IRS PDF'lerindeki alan adlarını çıkarıp `pdf_field_map.json` ile otomatik PDF doldurma (yerel, `pypdf`)
-3. ⏭ Banka (Mercury/Wise) CSV dışa aktarımlarını `transactions.csv` formatına çeviren içe aktarıcı
-4. ⏭ Çok yıllı açılış bakiyesi devri ve birim testleri
+1. ✅ Kural motoru (Form 5472 Rev. 12-2023), CLI
+2. ✅ Grafik arayüz, Mercury içe aktarma, Form 5472 PDF doldurma
+3. ⏳ Pro forma 1120 PDF doldurma — `forms/f1120.pdf` eklenince
+4. ⏭ Birim testleri

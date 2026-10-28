@@ -3,6 +3,7 @@ config.json
 transactions.csv
 *.private.*
 output/*
+data/
 !output/.gitkeep
 
 __pycache__/

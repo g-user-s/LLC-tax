@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LLC Form 5472 Hazırlayıcı</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top">
+  <div>
+    <h1>LLC Form 5472 Hazırlayıcı</h1>
+    <p class="sub">New Mexico tek üyeli LLC · yabancı ortak · App Store / Google Play geliri</p>
+  </div>
+  <div class="top-right">
+    <label class="year">Vergi yılı
+      <select id="year"></select>
+    </label>
+    <span id="saved" class="saved">Kaydedildi</span>
+  </div>
+</header>
+
+<nav class="steps" id="steps">
+  <button data-step="0">1. Uygunluk</button>
+  <button data-step="1">2. Şirket</button>
+  <button data-step="2">3. Ortak</button>
+  <button data-step="3">4. İşlemler</button>
+  <button data-step="4">5. Kontrol</button>
+  <button data-step="5">6. Formlar</button>
+</nav>
+
+<main>
+  <!-- 1. Uygunluk -->
+  <section class="step" data-step="0">
+    <h2>Bu araç sizin için mi?</h2>
+    <p class="hint">Araç yalnızca aşağıdaki koşulların <b>tamamını</b> sağlayan LLC'ler için tasarlandı.
+      Biri bile sağlanmıyorsa farklı formlar gerekebilir; bir uzmana danışın.</p>
+    <div id="eligibility" class="checklist"></div>
+    <div id="elig-stop" class="alert error hidden">
+      Tüm koşullar sağlanmadığı için devam edilemez. Bu durumda Form 5472 + Pro Forma 1120 tek başına yeterli olmayabilir.
+    </div>
+  </section>
+
+  <!-- 2. Şirket -->
+  <section class="step" data-step="1">
+    <h2>Şirket (LLC) bilgileri</h2>
+    <div class="grid">
+      <label class="wide">LLC adı (belgelerdeki gibi)<input data-path="company.name" placeholder="EXAMPLE APPS LLC"></label>
+      <label>EIN<input data-path="company.ein" placeholder="12-3456789"></label>
+      <label>Kuruluş tarihi<input type="date" data-path="company.date_incorporated"></label>
+      <label class="wide">ABD adresi (sokak, suite)<input data-path="company.address.street" placeholder="Registered agent / iş adresi"></label>
+      <label>Şehir<input data-path="company.address.city"></label>
+      <label>Eyalet<input data-path="company.address.state" maxlength="2"></label>
+      <label>ZIP<input data-path="company.address.zip"></label>
+      <label class="wide">Faaliyet tanımı (1d)<input data-path="company.principal_business_activity"></label>
+      <label>Faaliyet kodu (1e)<input data-path="company.principal_business_activity_code"></label>
+      <label class="wide">İşin yürütüldüğü ülke(ler) (1o)<input data-path="company.principal_countries_of_business"></label>
+      <label>Yıl başı banka bakiyesi (USD)<input data-path="company.opening_cash_balance_usd" inputmode="decimal"></label>
+      <label>Yıl sonu banka bakiyesi (USD, kontrol için)<input data-path="company.ending_cash_balance_usd_actual" inputmode="decimal"></label>
+      <label class="check wide"><input type="checkbox" data-path="company.first_year_filing_5472"> Bu LLC ilk kez Form 5472 veriyor</label>
+    </div>
+    <p class="hint">İlk yılsa yıl başı bakiyesi 0'dır. Yıl sonu bakiyesini banka ekstresinden girerseniz, araç işlemlerle karşılaştırıp eksik kayıt olup olmadığını kontrol eder.</p>
+  </section>
+
+  <!-- 3. Ortak -->
+  <section class="step" data-step="2">
+    <h2>Ortak (sahip) bilgileri</h2>
+    <p class="hint">IRS formları İngilizce doldurulur. Ülke adlarını kısaltmadan yazın (örn. <b>Turkey</b>).</p>
+    <div class="grid">
+      <label class="wide">Ad Soyad<input data-path="owner.name"></label>
+      <label class="wide">Adres (sokak, no)<input data-path="owner.address.street"></label>
+      <label>Şehir<input data-path="owner.address.city"></label>
+      <label>İl / eyalet<input data-path="owner.address.province"></label>
+      <label>Posta kodu<input data-path="owner.address.zip"></label>
+      <label>Ülke<input data-path="owner.address.country" placeholder="Turkey"></label>
+      <label>ABD vergi no (ITIN/SSN, varsa)<input data-path="owner.us_tin"></label>
+      <label>Yabancı vergi no (FTIN)<input data-path="owner.foreign_tin" placeholder="TC Kimlik / vergi no"></label>
+      <label>Reference ID<input data-path="owner.reference_id" placeholder="OWNER001">
+        <small>ITIN yoksa zorunlu. Kendiniz belirleyin, her yıl aynısını kullanın.</small></label>
+      <label>Vatandaşlık ülkesi<input data-path="owner.country_of_citizenship"></label>
+      <label>Vergi mukimi olduğu ülke<input data-path="owner.country_of_tax_residence"></label>
+      <label>İş yaptığı ülke<input data-path="owner.principal_country_of_business"></label>
+      <label class="wide">Ortağın faaliyeti (8c)<input data-path="owner.principal_business_activity" placeholder="Software developer"></label>
+      <label>Yıl başı: ortaktan alınan borç bakiyesi<input data-path="owner.opening_loan_balance_from_owner_usd" inputmode="decimal"></label>
+      <label>Yıl başı: ortağa verilen borç bakiyesi<input data-path="owner.opening_loan_balance_to_owner_usd" inputmode="decimal"></label>
+    </div>
+  </section>
+
+  <!-- 4. İşlemler -->
+  <section class="step" data-step="3">
+    <h2>Yıl içindeki işlemler</h2>
+    <div class="toolbar">
+      <button id="add-txn" class="primary">+ İşlem ekle</button>
+      <label class="button">Mercury CSV içe aktar<input type="file" id="mercury-file" accept=".csv,text/csv" hidden></label>
+      <label class="check"><input type="checkbox" id="only-review"> Sadece kontrol gerekenler</label>
+      <span id="txn-summary" class="muted"></span>
+    </div>
+    <div id="import-msg"></div>
+    <p class="hint">
+      <b>Ödeyen</b>: LLC banka hesabından mı, yoksa ortağın kendi cebinden mi ödendi?
+      Ortağın kişisel kartıyla ödenen LLC giderleri sermaye katkısı sayılır ve Part V'e yazılır.
+      Açıklamaları mümkünse İngilizce yazın (Part V ekinde görünür).
+    </p>
+    <div class="table-wrap">
+      <table id="txn-table">
+        <thead><tr><th>Tarih</th><th>Açıklama</th><th>Kategori</th><th>Tutar (USD)</th><th>Ödeyen</th><th></th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- 5. Kontrol -->
+  <section class="step" data-step="4">
+    <h2>Kontrol</h2>
+    <div id="check-errors"></div>
+    <div id="check-warnings"></div>
+    <div id="loan-questions" class="card hidden">
+      <h3>Ortakla borç ilişkisi var — Part VII</h3>
+      <p class="hint">Borç için uygulanan faiz oranı, Applicable Federal Rate'in (AFR) %100–130 aralığında mı?
+        Faizsiz borçta 42a: No, 42b: Yes olur.</p>
+      <label>42a — Oran AFR güvenli aralığının <b>içinde</b> mi?
+        <select data-path="part_vii.q42a"><option value="">Seçin</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+      <label>42b — Oran AFR güvenli aralığının <b>dışında</b> mı?
+        <select data-path="part_vii.q42b"><option value="">Seçin</option><option value="yes">Yes</option><option value="no">No</option></select></label>
+    </div>
+    <div id="check-result" class="cols"></div>
+  </section>
+
+  <!-- 6. Formlar -->
+  <section class="step" data-step="5">
+    <h2>Formları oluştur</h2>
+    <div id="f1120-missing" class="alert warn hidden">
+      <b>Form 1120 PDF'i eksik.</b> Vergi yılına ait Form 1120'yi
+      <code>https://www.irs.gov/pub/irs-pdf/f1120.pdf</code> adresinden indirip uygulama klasöründeki
+      <code>forms/f1120.pdf</code> olarak kaydedin. O zamana kadar yalnızca Form 5472 ve Part V eki üretilir.
+    </div>
+    <button id="generate" class="primary big">PDF formlarını oluştur</button>
+    <div id="gen-result"></div>
+    <div class="card">
+      <h3>Gönderim</h3>
+      <ul>
+        <li>Son tarih: vergi yılını izleyen <b>15 Nisan</b>. Uzatma için Form 7004 (üstüne "Foreign-owned U.S. DE").</li>
+        <li>E-file yapılamaz. Faks: <b>855-887-7737</b> veya posta:
+          Internal Revenue Service, 1973 Rulon White Blvd, M/S 6112, Attn: PIN Unit, Ogden, UT 84201</li>
+        <li>Pro forma 1120'yi göndermeden önce <b>imzalayın ve tarih atın</b>.</li>
+        <li>Geç/eksik dosyalama cezası form başına $25.000'dır; göndermeden önce her alanı gözden geçirin.</li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="nav">
+  <button id="prev">← Geri</button>
+  <button id="next" class="primary">İleri →</button>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>

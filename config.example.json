@@ -1,5 +1,14 @@
 {
   "tax_year": 2025,
+  "eligibility": {
+    "nm_llc": true,
+    "single_member": true,
+    "no_election": true,
+    "owner_nonresident": true,
+    "owner_not_in_us": true,
+    "app_store_income": true,
+    "no_us_presence": true
+  },
   "company": {
     "name": "EXAMPLE APPS LLC",
     "ein": "12-3456789",
@@ -9,13 +18,13 @@
       "state": "NM",
       "zip": "87101"
     },
-    "formation_state": "NM",
     "date_incorporated": "2024-03-15",
-    "principal_business_activity": "Software publishing (mobile apps)",
+    "principal_business_activity": "Software publishers",
     "principal_business_activity_code": "513210",
+    "principal_countries_of_business": "United States",
     "first_year_filing_5472": false,
-    "opening_cash_balance_usd": 1250.0,
-    "principal_countries_of_business": "United States"
+    "opening_cash_balance_usd": "1250.00",
+    "ending_cash_balance_usd_actual": "2586.47"
   },
   "owner": {
     "name": "JANE DOE",
@@ -23,7 +32,8 @@
       "street": "Example Cad. No:1",
       "city": "Istanbul",
       "zip": "34000",
-      "country": "Turkey"
+      "country": "Turkey",
+      "province": ""
     },
     "us_tin": "",
     "foreign_tin": "12345678901",
@@ -33,11 +43,11 @@
     "principal_country_of_business": "Turkey",
     "principal_business_activity": "Individual - software developer",
     "principal_business_activity_code": "",
-    "ownership_percent": 100,
-    "opening_loan_balance_from_owner_usd": 0.0,
-    "opening_loan_balance_to_owner_usd": 0.0
+    "opening_loan_balance_from_owner_usd": "0.00",
+    "opening_loan_balance_to_owner_usd": "0.00"
   },
-  "options": {
-    "round_to_whole_dollars": true
+  "part_vii": {
+    "q42a": "no",
+    "q42b": "no"
   }
 }
