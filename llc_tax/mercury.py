@@ -12,7 +12,9 @@ from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 DATE_COLS = ["date (utc)", "date", "posted date", "transaction date", "posted at"]
-AMOUNT_COLS = ["amount", "amount (usd)"]
+AMOUNT_COLS = ["amount", "amount (usd)", "amount usd"]
+CREDIT_COLS = ["credit", "credit amount", "deposit", "deposits", "money in", "inflow"]
+DEBIT_COLS = ["debit", "debit amount", "withdrawal", "withdrawals", "money out", "outflow"]
 DESC_COLS = ["description", "counterparty", "name", "counterparty name"]
 BANK_DESC_COLS = ["bank description", "memo"]
 STATUS_COLS = ["status"]
@@ -44,6 +46,13 @@ def _parse_date(s: str) -> str | None:
         except ValueError:
             continue
     return None
+
+
+def _num(v) -> Decimal:
+    s = str(v or "").replace(",", "").replace("$", "").replace("USD", "").strip()
+    if s.startswith("(") and s.endswith(")"):  # muhasebe biçimi: (12.34) = -12.34
+        s = "-" + s[1:-1]
+    return Decimal(s) if s else Decimal("0")
 
 
 def _owner_tokens(owner_name: str) -> list[str]:
@@ -79,8 +88,10 @@ def parse(csv_text: str, owner_name: str, tax_year: int) -> dict:
     reader = csv.DictReader(io.StringIO(csv_text.lstrip("﻿")))
     header = reader.fieldnames or []
     dcol, acol = _pick(header, DATE_COLS), _pick(header, AMOUNT_COLS)
-    if not dcol or not acol:
-        raise ValueError(f"Mercury CSV'de tarih/tutar sütunu bulunamadı. Sütunlar: {', '.join(header)}")
+    ccol, dbcol = _pick(header, CREDIT_COLS), _pick(header, DEBIT_COLS)
+    if not dcol or not (acol or (ccol and dbcol)):
+        raise ValueError("CSV'de tarih ve tutar (veya giriş/çıkış) sütunları bulunamadı. "
+                         f"Bulunan sütunlar: {', '.join(header)}")
     desc_col, bank_col = _pick(header, DESC_COLS), _pick(header, BANK_DESC_COLS)
     status_col, cat_col = _pick(header, STATUS_COLS), _pick(header, CATEGORY_COLS)
     tokens = _owner_tokens(owner_name)
@@ -99,9 +110,12 @@ def parse(csv_text: str, owner_name: str, tax_year: int) -> dict:
             skipped.append(f"satır {i}: {d} vergi yılı dışında")
             continue
         try:
-            amt = Decimal((row.get(acol) or "").replace(",", "").replace("$", "").strip())
+            if acol:
+                amt = _num(row.get(acol))
+            else:  # ayrı giriş/çıkış sütunları
+                amt = _num(row.get(ccol)) - abs(_num(row.get(dbcol)))
         except InvalidOperation:
-            skipped.append(f"satır {i}: tutar okunamadı '{row.get(acol)}'")
+            skipped.append(f"satır {i}: tutar okunamadı")
             continue
         if amt == 0:
             continue
