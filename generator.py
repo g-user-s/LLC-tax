@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""Form 5472 + Pro Forma 1120 veri hazırlayıcı (foreign-owned U.S. DE).
+
+Yalnızca standart kütüphane kullanır; ağ erişimi yoktur. Tüm veri yerelde kalır.
+
+Kullanım:
+    python3 generator.py --config config.json --transactions transactions.csv
+"""
+
+from __future__ import annotations
+
+import argparse
+import csv
+import json
+import re
+import sys
+from dataclasses import dataclass
+from datetime import date
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from pathlib import Path
+
+ZERO = Decimal("0")
+
+# category -> (LLC nakit etkisi işareti, ilişkili taraf işlemi mi?)
+# Gider kategorilerinde nakit etkisi yalnızca paid_by=llc ise uygulanır.
+CATEGORIES = {
+    "revenue":                   (+1, False),
+    "software_expense":          (-1, False),
+    "bank_fee":                  (-1, False),
+    "other_expense":             (-1, False),
+    "capital_contribution":      (+1, True),
+    "owner_draw":                (-1, True),
+    "loan_from_owner":           (+1, True),
+    "loan_repayment_to_owner":   (-1, True),
+    "interest_paid_to_owner":    (-1, True),
+    "loan_to_owner":             (-1, True),
+    "loan_repayment_from_owner": (+1, True),
+}
+EXPENSE_CATEGORIES = {"software_expense", "bank_fee", "other_expense"}
+PAID_BY = {"llc", "owner"}
+REQUIRED_COLUMNS = ["date", "description", "category", "amount_usd", "counterparty", "paid_by"]
+
+EIN_RE = re.compile(r"^\d{2}-\d{7}$")
+
+
+@dataclass
+class Txn:
+    line: int
+    date: date
+    description: str
+    category: str
+    amount: Decimal
+    counterparty: str
+    paid_by: str
+
+
+# --------------------------------------------------------------------------- I/O
+
+def load_config(path: Path, errors: list[str]) -> dict:
+    try:
+        cfg = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        sys.exit(f"HATA: config bulunamadı: {path}")
+    except json.JSONDecodeError as e:
+        sys.exit(f"HATA: config geçersiz JSON: {e}")
+
+    def need(obj: dict, key: str, where: str):
+        if not str(obj.get(key, "")).strip():
+            errors.append(f"config: '{where}.{key}' zorunlu")
+
+    company, owner = cfg.get("company", {}), cfg.get("owner", {})
+    if not isinstance(cfg.get("tax_year"), int):
+        errors.append("config: 'tax_year' tam sayı olmalı")
+    for k in ("name", "ein", "date_incorporated", "principal_business_activity",
+              "principal_business_activity_code"):
+        need(company, k, "company")
+    for k in ("street", "city", "state", "zip"):
+        need(company.get("address", {}), k, "company.address")
+    for k in ("name", "country_of_citizenship", "country_of_tax_residence"):
+        need(owner, k, "owner")
+    for k in ("street", "city", "country"):
+        need(owner.get("address", {}), k, "owner.address")
+
+    if company.get("ein") and not EIN_RE.match(company["ein"]):
+        errors.append("config: EIN formatı NN-NNNNNNN olmalı")
+    if company.get("date_incorporated"):
+        try:
+            date.fromisoformat(company["date_incorporated"])
+        except ValueError:
+            errors.append("config: 'company.date_incorporated' YYYY-MM-DD olmalı")
+    if not any(str(owner.get(k, "")).strip() for k in ("us_tin", "foreign_tin", "reference_id")):
+        errors.append("config: owner için us_tin, foreign_tin veya reference_id'den en az biri gerekli")
+    if owner.get("ownership_percent", 0) < 25:
+        errors.append("config: owner.ownership_percent >= 25 olmalı (aksi halde 5472 raporlama mantığı farklı)")
+    return cfg
+
+
+def load_transactions(path: Path, tax_year: int, errors: list[str]) -> list[Txn]:
+    try:
+        f = path.open(encoding="utf-8-sig", newline="")
+    except FileNotFoundError:
+        sys.exit(f"HATA: işlem dosyası bulunamadı: {path}")
+
+    txns: list[Txn] = []
+    with f:
+        reader = csv.DictReader(f)
+        missing = [c for c in REQUIRED_COLUMNS if c not in (reader.fieldnames or [])]
+        if missing:
+            sys.exit(f"HATA: CSV'de eksik sütun(lar): {', '.join(missing)}")
+
+        for i, row in enumerate(reader, start=2):
+            where = f"{path.name}:{i}"
+            try:
+                d = date.fromisoformat(row["date"].strip())
+            except ValueError:
+                errors.append(f"{where}: geçersiz tarih '{row['date']}'")
+                continue
+            if d.year != tax_year:
+                errors.append(f"{where}: tarih {d} vergi yılı ({tax_year}) dışında")
+
+            cat = row["category"].strip()
+            if cat not in CATEGORIES:
+                errors.append(f"{where}: bilinmeyen kategori '{cat}'")
+                continue
+
+            try:
+                amt = Decimal(row["amount_usd"].strip())
+            except InvalidOperation:
+                errors.append(f"{where}: geçersiz tutar '{row['amount_usd']}'")
+                continue
+            if amt <= 0:
+                errors.append(f"{where}: tutar pozitif olmalı (yön kategoriden belirlenir)")
+
+            paid_by = row["paid_by"].strip().lower()
+            if paid_by not in PAID_BY:
+                errors.append(f"{where}: paid_by 'llc' veya 'owner' olmalı")
+            if cat in ("capital_contribution", "loan_from_owner", "loan_repayment_from_owner") \
+                    and paid_by != "owner":
+                errors.append(f"{where}: '{cat}' için paid_by=owner olmalı")
+            if cat in ("owner_draw", "loan_repayment_to_owner", "interest_paid_to_owner",
+                       "loan_to_owner", "revenue") and paid_by != "llc":
+                errors.append(f"{where}: '{cat}' için paid_by=llc olmalı")
+
+            txns.append(Txn(i, d, row["description"].strip(), cat, amt,
+                            row["counterparty"].strip(), paid_by))
+    return txns
+
+
+# ----------------------------------------------------------------------- Hesap
+
+def compute(cfg: dict, txns: list[Txn], warnings: list[str]) -> dict:
+    company, owner, opts = cfg["company"], cfg["owner"], cfg.get("options", {})
+    year = cfg["tax_year"]
+    whole = opts.get("round_to_whole_dollars", True)
+    in_part_iv = opts.get("report_contributions_distributions_in_part_iv", True)
+
+    def money(x: Decimal):
+        q = Decimal("1") if whole else Decimal("0.01")
+        v = x.quantize(q, rounding=ROUND_HALF_UP)
+        return int(v) if whole else float(v)
+
+    def total(*cats, paid_by=None):
+        return sum((t.amount for t in txns if t.category in cats
+                    and (paid_by is None or t.paid_by == paid_by)), ZERO)
+
+    # --- Nakit / toplam varlık (yalnızca LLC hesabından geçen hareketler)
+    cash = Decimal(str(company.get("opening_cash_balance_usd", 0)))
+    for t in sorted(txns, key=lambda t: t.date):
+        sign, _ = CATEGORIES[t.category]
+        if t.category in EXPENSE_CATEGORIES and t.paid_by == "owner":
+            continue  # LLC hesabından çıkmadı
+        cash += sign * t.amount
+        if cash < 0:
+            warnings.append(f"satır {t.line}: {t.date} itibarıyla nakit bakiye negatif ({cash})")
+    total_assets = cash  # Varsayım: LLC'nin tek varlığı nakit
+
+    # --- İlişkili taraf tutarları
+    contributions = total("capital_contribution")
+    owner_paid_exp = sum((t.amount for t in txns
+                          if t.category in EXPENSE_CATEGORIES and t.paid_by == "owner"), ZERO)
+    draws = total("owner_draw")
+    interest_paid = total("interest_paid_to_owner")
+
+    borrowed_beg = Decimal(str(owner.get("opening_loan_balance_from_owner_usd", 0)))
+    borrowed_end = borrowed_beg + total("loan_from_owner") - total("loan_repayment_to_owner")
+    loaned_beg = Decimal(str(owner.get("opening_loan_balance_to_owner_usd", 0)))
+    loaned_end = loaned_beg + total("loan_to_owner") - total("loan_repayment_from_owner")
+    if borrowed_end < 0 or loaned_end < 0:
+        warnings.append("borç bakiyesi negatif çıktı: açılış bakiyelerini/geri ödemeleri kontrol edin")
+
+    line12 = (contributions + owner_paid_exp) if in_part_iv else ZERO
+    line25 = draws if in_part_iv else ZERO
+    line13 = borrowed_end + line12
+    line26 = loaned_end + interest_paid + line25
+    gross_payments = line13 + line26
+
+    # --- Defter özeti (formlara girmez; kontrol amaçlı)
+    revenue = total("revenue")
+    expenses = {c: total(c) for c in sorted(EXPENSE_CATEGORIES)}
+    expenses["interest_paid_to_owner"] = interest_paid
+    net_income = revenue - sum(expenses.values(), ZERO)
+
+    def addr(a: dict) -> str:
+        parts = [a.get("street"), a.get("city"), a.get("state"), a.get("zip"), a.get("country")]
+        return ", ".join(p for p in parts if p)
+
+    first_year = bool(company.get("first_year_filing_5472"))
+    if not first_year and date.fromisoformat(company["date_incorporated"]).year == year:
+        warnings.append("kuruluş yılı = vergi yılı ama first_year_filing_5472=false; kontrol edin")
+
+    m = money
+    pro_forma_1120 = [
+        ("Header", "Üst kenara yazılacak ibare", "Foreign-owned U.S. DE"),
+        ("Header", "Tax year", f"{year}-01-01 / {year}-12-31 (calendar year)"),
+        ("Name", "Corporation name", company["name"]),
+        ("Address", "Number, street, city, state, ZIP", addr(company["address"])),
+        ("B", "Employer identification number", company["ein"]),
+        ("C", "Date incorporated", company["date_incorporated"]),
+        ("D", "Total assets", m(total_assets)),
+        ("E(1)", "Initial return", "X" if first_year else ""),
+        ("Lines 1-35", "Gelir/gider satırları", "BOŞ bırakılır (pro forma)"),
+    ]
+
+    form_5472 = [
+        # Part I
+        ("I", "1a", "Name & address of reporting corporation",
+         f"{company['name']} — {addr(company['address'])}"),
+        ("I", "1b", "Employer identification number", company["ein"]),
+        ("I", "1c", "Total assets", m(total_assets)),
+        ("I", "1d", "Principal business activity", company["principal_business_activity"]),
+        ("I", "1e", "Principal business activity code", company["principal_business_activity_code"]),
+        ("I", "1f", "Total value of gross payments (this form)", m(gross_payments)),
+        ("I", "1g", "Total number of Forms 5472 filed", 1),
+        ("I", "1h", "Total value of gross payments (all forms)", m(gross_payments)),
+        ("I", "1i", "Consolidated filing", ""),
+        ("I", "1j", "Initial year filing Form 5472", "X" if first_year else ""),
+        ("I", "1k", "Country of incorporation", "US"),
+        ("I", "1l", "Date of incorporation", company["date_incorporated"]),
+        ("I", "1m", "Countries where files income tax return as resident", "US"),
+        ("I", "1n", "Principal country(ies) where business is conducted", "US"),
+        # Part II — 25% foreign shareholder (SMLLC'de doğrudan sahip)
+        ("II", "1a", "Name & address of direct 25% foreign shareholder",
+         f"{owner['name']} — {addr(owner['address'])}"),
+        ("II", "1b(1)", "U.S. identifying number", owner.get("us_tin", "")),
+        ("II", "1b(2)", "Reference ID number", owner.get("reference_id", "")),
+        ("II", "1b(3)", "FTIN", owner.get("foreign_tin", "")),
+        ("II", "1c", "Principal country(ies) of business", owner.get("principal_country_of_business", "")),
+        ("II", "1d", "Country of citizenship/organization", owner["country_of_citizenship"]),
+        ("II", "1e", "Country(ies) of tax residence", owner["country_of_tax_residence"]),
+        # Part III — Foreign related party (aynı kişi)
+        ("III", "1a", "Name & address of related party", f"{owner['name']} — {addr(owner['address'])}"),
+        ("III", "1b(1)", "U.S. identifying number", owner.get("us_tin", "")),
+        ("III", "1b(2)", "Reference ID number", owner.get("reference_id", "")),
+        ("III", "1b(3)", "FTIN", owner.get("foreign_tin", "")),
+        ("III", "1c", "Principal business activity", owner.get("principal_business_activity", "")),
+        ("III", "1d", "Principal business activity code", owner.get("principal_business_activity_code", "")),
+        ("III", "1e", "Relationship", "X  25% foreign shareholder"),
+        ("III", "1f", "Principal country(ies) of business", owner.get("principal_country_of_business", "")),
+        ("III", "1g", "Country(ies) of tax residence", owner["country_of_tax_residence"]),
+        # Part IV — Monetary transactions (sıfır olmayan + toplamlar)
+        ("IV", "9a", "Amounts borrowed — beginning balance", m(borrowed_beg)),
+        ("IV", "9b", "Amounts borrowed — ending balance", m(borrowed_end)),
+        ("IV", "12", "Other amounts received (contrib. + owner-paid exp.)", m(line12)),
+        ("IV", "13", "Total amounts received (lines 1–12)", m(line13)),
+        ("IV", "22a", "Amounts loaned — beginning balance", m(loaned_beg)),
+        ("IV", "22b", "Amounts loaned — ending balance", m(loaned_end)),
+        ("IV", "23", "Interest paid", m(interest_paid)),
+        ("IV", "25", "Other amounts paid (distributions / owner's draw)", m(line25)),
+        ("IV", "26", "Total amounts paid (lines 14–25)", m(line26)),
+        # Part V — DE reportable transactions
+        ("V", "check", "Reportable transactions attached (see statement)",
+         "X" if (contributions or owner_paid_exp or draws) else ""),
+    ]
+
+    part_v_lines = [
+        f"FORM 5472 — PART V STATEMENT — {company['name']} (EIN {company['ein']}) — Tax year {year}",
+        f"Related party: {owner['name']} (100% foreign owner)" if owner.get("ownership_percent") == 100
+        else f"Related party: {owner['name']}",
+        "",
+        f"{'Capital contributions from owner (cash):':<55}${m(contributions):>12,}",
+        f"{'LLC expenses paid personally by owner (contribution):':<55}${m(owner_paid_exp):>12,}",
+        f"{'Distributions to owner (owner' + chr(39) + 's draw):':<55}${m(draws):>12,}",
+        "",
+        "Detail:",
+    ]
+    for t in sorted(txns, key=lambda t: t.date):
+        is_owner_exp = t.category in EXPENSE_CATEGORIES and t.paid_by == "owner"
+        if t.category in ("capital_contribution", "owner_draw") or is_owner_exp:
+            kind = "owner-paid expense" if is_owner_exp else t.category
+            part_v_lines.append(f"  {t.date}  {kind:<22} ${t.amount:>10,.2f}  {t.description}")
+
+    return {
+        "tax_year": year,
+        "pro_forma_1120": [dict(zip(("line", "description", "value"), r)) for r in pro_forma_1120],
+        "form_5472": [dict(zip(("part", "line", "description", "value"), r)) for r in form_5472],
+        "part_v_statement": "\n".join(part_v_lines),
+        "books_summary": {
+            "opening_cash": m(Decimal(str(company.get("opening_cash_balance_usd", 0)))),
+            "ending_cash": m(cash),
+            "revenue": m(revenue),
+            "expenses": {k: m(v) for k, v in expenses.items()},
+            "net_income": m(net_income),
+            "transaction_count": len(txns),
+        },
+    }
+
+
+# ---------------------------------------------------------------------- Çıktı
+
+def print_report(r: dict) -> None:
+    def table(title, rows, cols):
+        print(f"\n=== {title} ===")
+        widths = [max(len(str(row[c])) for row in rows + [dict(zip(cols, cols))]) for c in cols]
+        widths[-2] = min(widths[-2], 58)
+        for row in [dict(zip(cols, [c.upper() for c in cols]))] + rows:
+            cells = [str(row[c])[:widths[i]].ljust(widths[i]) for i, c in enumerate(cols)]
+            print("  " + "  ".join(cells))
+
+    table(f"PRO FORMA FORM 1120 — {r['tax_year']}", r["pro_forma_1120"],
+          ["line", "description", "value"])
+    table(f"FORM 5472 — {r['tax_year']}", r["form_5472"],
+          ["part", "line", "description", "value"])
+    print("\n=== PART V STATEMENT (ek sayfa) ===\n" + r["part_v_statement"])
+    print("\n=== DEFTER ÖZETİ (formlara girmez) ===")
+    print(json.dumps(r["books_summary"], indent=2, ensure_ascii=False))
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Form 5472 + Pro Forma 1120 veri hazırlayıcı")
+    ap.add_argument("--config", default="config.json", type=Path)
+    ap.add_argument("--transactions", default="transactions.csv", type=Path)
+    ap.add_argument("--output-dir", default="output", type=Path)
+    ap.add_argument("--no-write", action="store_true", help="Sadece konsola bas, dosya yazma")
+    args = ap.parse_args()
+
+    errors: list[str] = []
+    warnings: list[str] = []
+    cfg = load_config(args.config, errors)
+    txns = load_transactions(args.transactions, cfg.get("tax_year", 0), errors)
+
+    if errors:
+        print("DOĞRULAMA HATALARI:", file=sys.stderr)
+        for e in errors:
+            print(f"  - {e}", file=sys.stderr)
+        return 1
+
+    report = compute(cfg, txns, warnings)
+    print_report(report)
+
+    if warnings:
+        print("\nUYARILAR:")
+        for w in warnings:
+            print(f"  ! {w}")
+
+    if not args.no_write:
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+        year = report["tax_year"]
+        json_path = args.output_dir / f"form_data_{year}.json"
+        txt_path = args.output_dir / f"part_v_statement_{year}.txt"
+        json_path.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
+        txt_path.write_text(report["part_v_statement"] + "\n", encoding="utf-8")
+        print(f"\nYazıldı: {json_path}\nYazıldı: {txt_path}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

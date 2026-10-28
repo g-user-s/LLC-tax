@@ -1,0 +1,44 @@
+{
+  "tax_year": 2025,
+  "company": {
+    "name": "EXAMPLE APPS LLC",
+    "ein": "12-3456789",
+    "address": {
+      "street": "123 Example St, Suite 100",
+      "city": "Albuquerque",
+      "state": "NM",
+      "zip": "87101",
+      "country": "US"
+    },
+    "formation_state": "NM",
+    "date_incorporated": "2024-03-15",
+    "principal_business_activity": "Software publishing (mobile apps)",
+    "principal_business_activity_code": "513210",
+    "first_year_filing_5472": false,
+    "opening_cash_balance_usd": 1250.00
+  },
+  "owner": {
+    "name": "JANE DOE",
+    "address": {
+      "street": "Example Cad. No:1",
+      "city": "Istanbul",
+      "zip": "34000",
+      "country": "TR"
+    },
+    "us_tin": "",
+    "foreign_tin": "12345678901",
+    "reference_id": "",
+    "country_of_citizenship": "TR",
+    "country_of_tax_residence": "TR",
+    "principal_country_of_business": "TR",
+    "principal_business_activity": "Individual - software developer",
+    "principal_business_activity_code": "",
+    "ownership_percent": 100,
+    "opening_loan_balance_from_owner_usd": 0.00,
+    "opening_loan_balance_to_owner_usd": 0.00
+  },
+  "options": {
+    "report_contributions_distributions_in_part_iv": true,
+    "round_to_whole_dollars": true
+  }
+}

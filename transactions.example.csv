@@ -1,0 +1,13 @@
+date,description,category,amount_usd,counterparty,paid_by,notes
+2025-01-05,Sermaye transferi (Wise),capital_contribution,2000.00,JANE DOE,owner,Owner -> LLC banka hesabı
+2025-01-10,Apple Developer Program,software_expense,99.00,Apple Inc.,llc,Yıllık üyelik
+2025-01-12,Google Play Console,software_expense,25.00,Google LLC,owner,Ortağın kişisel kartıyla ödendi
+2025-02-01,GitHub Copilot,software_expense,10.00,GitHub Inc.,llc,Aylık abonelik
+2025-02-15,App Store ödemesi,revenue,412.37,Apple Inc.,llc,Ocak satışları
+2025-03-01,Registered agent yenileme,other_expense,50.00,Example Agent LLC,llc,
+2025-03-15,Google Play ödemesi,revenue,188.10,Google LLC,llc,Şubat satışları
+2025-04-01,Ortağa kişisel çekim,owner_draw,800.00,JANE DOE,llc,LLC -> Owner
+2025-06-30,Banka ücreti,bank_fee,5.00,Example Bank,llc,
+2025-07-01,Ortaktan borç,loan_from_owner,500.00,JANE DOE,owner,Yazılı loan agreement mevcut
+2025-11-01,Borç geri ödemesi,loan_repayment_to_owner,200.00,JANE DOE,llc,
+2025-12-20,Ortağa kişisel çekim,owner_draw,600.00,JANE DOE,llc,

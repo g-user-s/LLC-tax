@@ -1,0 +1,10 @@
+# Gerçek (hassas) veriler asla commit edilmez
+config.json
+transactions.csv
+*.private.*
+output/*
+!output/.gitkeep
+
+__pycache__/
+*.pyc
+.venv/
